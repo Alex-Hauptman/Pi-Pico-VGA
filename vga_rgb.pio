@@ -1,0 +1,30 @@
+.program vga_rgb
+
+; This program shifts out 6 bits of color data to the RGB pins.
+; It relies on the DMA to feed it data during the active video period,
+; and feed it zeroes (black) during the blanking periods.
+.wrap_target
+    out pins, 6
+.wrap
+
+% c-sdk {
+static inline void vga_rgb_program_init(PIO pio, uint sm, uint offset, uint pin_base) {
+    pio_sm_config c = vga_rgb_program_get_default_config(offset);
+    
+    // Map the 6 color pins (e.g., 2 Red, 2 Green, 2 Blue)
+    sm_config_set_out_pins(&c, pin_base, 6);
+    
+    // Shift out right, autopull enabled, threshold = 8 bits (1 byte per pixel payload)
+    sm_config_set_out_shift(&c, true, true, 8);
+    
+    // Initialize pin directions
+    for(int i=0; i<6; i++) {
+        pio_gpio_init(pio, pin_base + i);
+    }
+    pio_sm_set_consecutive_pindirs(pio, sm, pin_base, 6, true);
+    
+    // Load config and start state machine
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
