@@ -21,7 +21,7 @@
 
 // 320x240 Framebuffer
 uint8_t framebuffer[HEIGHT][WIDTH];
-uint8_t black_line[WIDTH] = {0}; // Blanking line payload
+uint8_t black_line[WIDTH] = {0}; // Blanking line data
 
 PIO pio = pio0;
 uint sm_rgb = 0;
@@ -38,7 +38,7 @@ volatile int cmd_tail = 0;
 char cmd_buffer[CMD_BUF_SIZE];
 volatile int cmd_pos = 0;
 
-// VGA Timing constants for 640x480 @ 60Hz (Pixel clocked at 25MHz)
+// VGA Timing constants for 640x480 at 60Hz (Pixel clocked at 25MHz)
 // Since our width is 320, each framebuffer pixel will span 2 clock cycles.
 void hsync_pulse_start() { gpio_put(HSYNC_GPIO, 0); }
 void hsync_pulse_end()   { gpio_put(HSYNC_GPIO, 1); }
@@ -50,7 +50,7 @@ void __not_in_flash_func(vga_dma_handler)() {
 
     scanline++;
     
-    // Standard VGA matrix framing layout:
+    // VGA Cycle:
     // 0-479: Active lines (We stretch 240 lines to 480 by repeating each line twice)
     // 480-489: Front Porch (before sync pulse)
     // 490-491: VSYNC Pulse (Low active)
@@ -61,17 +61,17 @@ void __not_in_flash_func(vga_dma_handler)() {
     }
 
     if (scanline < 480) {
-        // Active display area: map scanline to 0-239 framebuffer
+        // Active display area
         int fb_y = scanline / 2;
         dma_channel_set_read_addr(dma_chan, framebuffer[fb_y], true);
     } else {
-        // Blanking interval: stream zeroed out black data
+        // Blanking interval
         dma_channel_set_read_addr(dma_chan, black_line, true);
     }
 
     // Generate strict precise inline HSYNC timing sequences
     hsync_pulse_start();
-    busy_wait_us_32(4); // 3.8us HSYNC width
+    busy_wait_us_32(4); // about 3.8us HSYNC width
     hsync_pulse_end();
 
     // Handle VSYNC Timing cleanly
@@ -149,13 +149,13 @@ void vga_init() {
     uint offset = pio_add_program(pio, &vga_rgb_program);
     vga_rgb_program_init(pio, sm_rgb, offset, RGB_BASE);
 
-    // System clock scaling setup: Standard 25MHz base for clean VGA delivery
+    // 25 MHZ
     // 320 pixels across an active horizontal line requires a clock divider mapping 
     // to stretch the duration across the active timing width.
     float div = (float)clock_get_hz(clk_sys) / 25000000.0f;
     sm_config_set_clkdiv(&(pio->sm[sm_rgb].config), div);
 
-    // Configure Direct Memory Access Engine
+    // direct memory manipulation
     dma_chan = dma_claim_unused_channel(true);
     dma_channel_config dma_c = dma_channel_get_default_config(dma_chan);
     channel_config_set_transfer_data_size(&dma_c, DMA_SIZE_8);
@@ -205,7 +205,7 @@ void poll_uart() {
     }
 }
 
-// Optimized string Tokenizer replacing slow sscanf calls
+// string tokinizer for commands
 void execute_command(char *cmd) {
     char *token = strtok(cmd, " ");
     if (!token) return;
@@ -256,7 +256,7 @@ int main() {
     gpio_set_function(1, GPIO_FUNC_UART); // RX
 
     vga_init();
-    clear_screen(rgb(0, 0, 255)); // Initialize with a solid Blue Screen
+    clear_screen(rgb(0, 0, 255)); // init with blue screen for debug
 
     while (1) {
         poll_uart();
